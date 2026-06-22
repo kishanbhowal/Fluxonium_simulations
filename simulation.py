@@ -50,7 +50,7 @@ def run_readout_trajectory(
     
     # Set up the Hamiltonian, jump operators, and initial state for the simulation, based on the provided parameters and pulse. We then run the master equation solver to simulate the time evolution of the system, and extract the relevant expectation values to construct the ReadoutResult.
     ops = operators(params) # Get the relevant operators for the system, including the annihilation operator, number operator, and Hamiltonian terms.
-    hamiltonian = readout_hamiltonian(params, pulse)# Construct the time-dependent Hamiltonian for the readout, based on the device parameters, pulse parameters, and total simulation time.
+    hamiltonian = readout_hamiltonian_rwa(params, pulse)# Construct the time-dependent Hamiltonian for the readout, based on the device parameters, pulse parameters, and total simulation time.
     #ops = operators(params)
     jumps = jump_operators(params,ops["a"])# Get the list of jump operators for the system, which represent the dissipation processes. In this case, we only include the resonator decay as a jump operator.
     psi0 = basis_state(params, initial_fluxonium_state)# Construct the initial state for the simulation, which is a basis state corresponding to the specified initial fluxonium state and the resonator in the vacuum state. The state is represented as a QArray.
