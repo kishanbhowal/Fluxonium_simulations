@@ -1,0 +1,9 @@
+dynamiqs
+jax
+jaxlib
+numpy
+scipy
+torch
+matplotlib
+jupyter
+ipykernel
