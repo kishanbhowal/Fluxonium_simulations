@@ -1,6 +1,4 @@
 dynamiqs
-jax
-jaxlib
 numpy
 scipy
 torch
