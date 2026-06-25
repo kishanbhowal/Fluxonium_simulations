@@ -13,10 +13,14 @@ def operators(params: DeviceParameters) -> dict[str, dq.QArray]:
     a_r = dq.destroy(params.resonator_dim, layout=dq.dia) # Annihilation operator for the resonator subsystem
 
     n_f = dq.asqarray(params.n_matrix, dims=(params.fluxonium_dim,) ) # Charge operator for the fluxonium subsystem, represented as a QArray with appropriate dimensions
-    h_f = dq.asqarray(np.diag(params.omega_levels), dims=(params.fluxonium_dim,), layout=dq.dia) # Hamiltonian for the fluxonium subsystem, represented as a QArray with appropriate dimensions
+    h_f = dq.asqarray(np.diag(params.omega_levels)*np.pi*2, dims=(params.fluxonium_dim,), layout=dq.dia) # Hamiltonian for the fluxonium subsystem, represented as a QArray with appropriate dimensions
+    n_f_minus = dq.asqarray(params.n_minus_matrix, dims=(params.fluxonium_dim,) )
+    n_f_plus = dq.asqarray(params.n_plus_matrix, dims=(params.fluxonium_dim,) )
 
     a = dq.tensor(identity_f, a_r) # Annihilation operator for the full system, constructed as a tensor product of the identity on the fluxonium subsystem and the annihilation operator on the resonator subsystem
     n = dq.tensor(n_f, identity_r) # Charge operator for the full system, constructed as a tensor product of the charge operator on the fluxonium subsystem and the identity on the resonator subsystem
+    n_minus = dq.tensor(n_f_minus, identity_r)
+    n_plus = dq.tensor(n_f_plus, identity_r)
     h_fluxonium = dq.tensor(h_f, identity_r) # Hamiltonian for the full system, constructed as a tensor product of the Hamiltonian on the fluxonium subsystem and the identity on the resonator subsystem
     h_resonator = params.omega_r * (a.dag() @ a) # Hamiltonian for the resonator subsystem, represented as a QArray
     drive_op = -1j * (a - a.dag()) # Drive operator for the resonator, represented as a QArray. This is the operator that couples to the drive in the Hamiltonian, and is constructed as -i times the difference between the annihilation and creation operators of the resonator.
@@ -24,6 +28,8 @@ def operators(params: DeviceParameters) -> dict[str, dq.QArray]:
     return {
         "a": a,
         "n": n,
+        "n_plus": n_plus,
+        "n_minus": n_minus,
         "h_fluxonium": h_fluxonium,
         "h_static": h_resonator + h_fluxonium + params.g * drive_op @ n,
     #    "h_static": h_resonator, #+ h_fluxonium + params.g * n @ drive_op,
@@ -53,21 +59,36 @@ def readout_hamiltonian(
     #     envelope = pulse.amplitude * jnp.minimum(rise, fall) * active
     #     return envelope * jnp.cos(pulse.omega_d * t)
     def modulation(t: float):
-        amp = jnp.where(t< 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2, 0.0))
+        amp = jnp.where(t< 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2, 0.0)) * 0
         return amp * jnp.cos(pulse.omega_d * t)
 
     return h_static + dq.modulated(modulation, ops["drive_op"])
 
+def h_interaction(params: DeviceParameters, pulse: PulseParameters, t:float = 600.0) -> dq.TimeQArray :
+        ops = operators(params)
+        delta_r = params.omega_r - pulse.omega_d
+        amp = jnp.where(t< 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2, 0.0))
+        def modulation(t: float): #based on the pulse parameters and the current time t. The modulation is given by the envelope of the pulse multiplied by a cosine function at the drive frequency.
+            amp = jnp.where(t< 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2, 0.0))
+            return amp  
+        h_int = params.g *(-1j)*(ops["a"].dag()* jnp.exp(1j * delta_r * t) - ops["a"]* jnp.exp(-1j * delta_r * t)) #+ 0.5 * modulation * (ops["a"].dag()* jnp.exp(2j * pulse.omega_d * t) - ops["a"]* jnp.exp(-2j * pulse.omega_d * t))
+        return {"h_interaction" : h_int} 
+
 def readout_hamiltonian_rwa(params: DeviceParameters, pulse: PulseParameters) -> dq.TimeQArray:
     ops = operators(params) # We first compute the static part of the Hamiltonian in the rotating frame, which includes the detuning of the resonator and the fluxonium Hamiltonian, as well as the coupling term. The drive term is then added as a time-dependent modulation on top of this static Hamiltonian. The modulation function is defined to capture the time dependence of the drive amplitude, which can have different values during different time intervals of the pulse.
+    h_int = h_interaction(params, pulse)
     delta_r = params.omega_r - pulse.omega_d # Compute the detuning of the resonator frequency from the drive frequency, which is an important parameter in the rotating frame Hamiltonian. The detuning determines how the resonator responds to the drive, and can lead to different dynamics depending on whether it is positive, negative, or zero.
     h_res = delta_r * ops["n_photon"] # The resonator Hamiltonian in the rotating frame is given by the detuning times the number operator for the resonator. This captures the energy of the resonator photons relative to the drive frequency, and is a key part of the dynamics in the rotating frame.
-    h_static = h_res + ops["h_fluxonium"] + params.g * ops["drive_op"] @ ops["n"] # The static part of the Hamiltonian in the rotating frame includes the resonator Hamiltonian, the fluxonium Hamiltonian, and the coupling term between the drive and the charge operator of the fluxonium. This static Hamiltonian captures the essential physics of the system in the rotating frame, and serves as the baseline for adding the time-dependent drive modulation.
+    h_static = h_res + ops["h_fluxonium"] + params.g*(-1j) * (ops["a"]@ ops["n_plus"] - ops["a"].dag()@ ops["n_minus"])  # The static part of the Hamiltonian in the rotating frame includes the resonator Hamiltonian, the fluxonium Hamiltonian, and the coupling term between the drive and the charge operator of the fluxonium. This static Hamiltonian captures the essential physics of the system in the rotating frame, and serves as the baseline for adding the time-dependent drive modulation.
     h_static = dq.constant(h_static) # We then add the time-dependent modulation for the drive term, which captures the time dependence of the drive amplitude. The modulation function is defined to have different values during different time intervals of the pulse, allowing us to model a pulse that has a certain amplitude for a specified duration and then turns off. The modulation is applied to the drive operator in the Hamiltonian, which leads to time-dependent dynamics when we simulate the system.
     def modulation(t: float): #based on the pulse parameters and the current time t. The modulation is given by the envelope of the pulse multiplied by a cosine function at the drive frequency.
-        amp = jnp.where(t< 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2, 0.0))
+        amp = jnp.where(t< 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2 , 0.0)) 
+        #h_interaction = params.g*(-1j) *(-1j)*(ops["a"].dag()* jnp.exp(1j * pulse.omega_d * t) - ops["a"]* jnp.exp(-1j * pulse.omega_d * t)) + 0.5 * amp * (ops["a"].dag()* jnp.exp(2j * pulse.omega_d * t) - ops["a"]* jnp.exp(-2j * pulse.omega_d * t))
+
+        print(f"t={t}, amp={amp}")
         return amp * 0.5
-    return h_static + dq.modulated(modulation, ops["drive_op"])
+    
+    return h_static  + dq.modulated(modulation, ops["drive_op"]) #+ h_int["h_interaction"]
 
 
 def jump_operators(params: DeviceParameters, a: dq.QArray) -> list[dq.QArray]:
