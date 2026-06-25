@@ -125,7 +125,8 @@ def run_readout_pair(
 ) -> ReadoutPairResult:
     # Run readout simulations for both the ground and excited states of the fluxonium, and compute the resulting SNR and assignment error as functions of time. We use the run_readout_trajectory function to simulate the trajectories for both initial states, and then compute the SNR and assignment error based on the resulting resonator fields.
     ground = run_readout_trajectory(params, pulse, sim, initial_fluxonium_state=0) # Simulate the readout trajectory for the ground state of the fluxonium, which corresponds to an initial fluxonium state of 0. We obtain the ReadoutResult for the ground state, which includes the time points, resonator field, resonator population, fluxonium populations, and leakage as functions of time.
-    excited = run_readout_trajectory(params, pulse, sim, initial_fluxonium_state=1) # Simulate the readout trajectory for the excited state of the fluxonium, which corresponds to an initial fluxonium state of 1. We obtain the ReadoutResult for the excited state, which includes the time points, resonator field, resonator population, fluxonium populations, and leakage as functions of time.
+    #excited = run_readout_trajectory(params, pulse, sim, initial_fluxonium_state=1) # Simulate the readout trajectory for the excited state of the fluxonium, which corresponds to an initial fluxonium state of 1. We obtain the ReadoutResult for the excited state, which includes the time points, resonator field, resonator population, fluxonium populations, and leakage as functions of time.
+    excited = ground
     snr = readout_snr( # Compute the SNR for the readout, based on the resonator fields for the ground and excited states, and the measurement parameters. The SNR is computed as a function of time, and takes into account the separation between the resonator fields as well as the measurement efficiency and resonator decay rate.
         sim.tsave,
         ground.resonator_field,
