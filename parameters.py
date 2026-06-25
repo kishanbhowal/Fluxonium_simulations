@@ -13,6 +13,8 @@ class DeviceParameters:
 
     omega_levels: np.ndarray
     n_matrix: np.ndarray
+    n_plus_matrix: np.ndarray
+    n_minus_matrix: np.ndarray
     omega_r: float
     g: float
     kappa: float
@@ -29,6 +31,10 @@ class DeviceParameters:
             raise ValueError("omega_levels must be a 1D array.")
         if self.n_matrix.shape != (self.fluxonium_dim, self.fluxonium_dim):
             raise ValueError("n_matrix must be square with size len(omega_levels).")
+        if self.n_plus_matrix.shape != (self.fluxonium_dim, self.fluxonium_dim):
+            raise ValueError("n_minus_matrix must be square with size len(omega_levels).")
+        if self.n_minus_matrix.shape != (self.fluxonium_dim, self.fluxonium_dim):
+            raise ValueError("n_plus_matrix must be square with size len(omega_levels).")
         if self.resonator_dim < 2:
             raise ValueError("resonator_dim must be at least 2.")
         if self.kappa < 0:
@@ -108,6 +114,8 @@ def load_json(path: str | Path) -> tuple[DeviceParameters, PulseParameters, Simu
     params = DeviceParameters(
         omega_levels=np.asarray(device["omega_levels"], dtype=float),
         n_matrix=np.asarray(device["n_matrix"], dtype=complex),
+        n_minus_matrix=np.asarray(device["n_minus_matrix"], dtype= complex),
+        n_plus_matrix=np.asarray(device["n_plus_matrix"], dtype= complex),
         omega_r=float(device["omega_r"]),
         g=float(device["g"]),
         kappa=float(device["kappa"]),
