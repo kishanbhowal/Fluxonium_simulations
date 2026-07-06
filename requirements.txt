@@ -1,0 +1,25 @@
+# Core numerical libraries
+numpy==2.4.6
+scipy==1.18.0
+
+# Plotting
+matplotlib==3.11.0
+
+# Data handling
+pandas==3.0.3
+
+# Progress bars
+tqdm==4.68.3
+
+# Quantum simulation
+dynamiqs==0.3.4
+qutip==5.3.0
+
+# JAX ecosystem
+jax==0.6.2
+jaxlib==0.6.2
+jaxtyping==0.3.11
+equinox==0.13.8
+diffrax==0.7.2
+optimistix==0.1.0
+lineax==0.1.0
