@@ -1,0 +1,16 @@
+# Ignore PDFs
+*.pdf
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# VS Code settings (optional)
+.vscode/
