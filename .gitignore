@@ -1,16 +1,42 @@
-# Ignore PDFs
-*.pdf
-
-# Python cache
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.so
 
 # Virtual environments
 .venv/
 venv/
+env/
+dq_gpu/
 
-# Jupyter checkpoints
+# Jupyter
 .ipynb_checkpoints/
 
-# VS Code settings (optional)
+# IDE
 .vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Simulation data
+*.h5
+*.hdf5
+*.npz
+*.npy
+*.pkl
+
+# Generated plots
+*.png
+
+# Generated PDFs
+*.pdf
+
+# Logs
+*.log
+
+# Secrets
+.env
+*.pem
+*.key
