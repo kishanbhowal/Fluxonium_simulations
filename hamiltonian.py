@@ -44,13 +44,15 @@ def operators(params: DeviceParameters, pulse: PulseParameters ) -> dict[str, dq
  
     
     h_fluxonium = dq.tensor(h_f, identity_r) # Hamiltonian for the full system, constructed as a tensor product of the Hamiltonian on the fluxonium subsystem and the identity on the resonator subsystem
+    h_fluxonium_f = h_f
     h_resonator = params.omega_r * (a.dag() @ a) # Hamiltonian for the resonator subsystem, represented as a QArray
     drive_op = -1j * (a - a.dag()) # Drive operator for the resonator, represented as a QArray. This is the operator that couples to the drive in the Hamiltonian, and is constructed as -i times the difference between the annihilation and creation operators of the resonator.
     #drive_op = a + a.dag() # Drive operator for the resonator, represented as a QArray. This is the operator that couples to the drive in the Hamiltonian, and is constructed as the sum of the annihilation and creation operators of the resonator.
     return {
         "a": a,
         "n": n,
-        
+        "n_f": n_f,
+        "h_f": h_f,
         "h_fluxonium": h_fluxonium,
         "h_static": h_resonator + h_fluxonium + params.g * drive_op @ n,
     #    "h_static": h_resonator, #+ h_fluxonium + params.g * n @ drive_op,
@@ -176,8 +178,12 @@ def readout_hamiltonian(params: DeviceParameters, pulse: PulseParameters, fluxon
     '''READOUT HAMILTONIAN BASED ON THE SHILLITO et.al . PAPER'''
     ops = operators(params, pulse)
     omega_r = Omega_r(params, pulse, fluxonium_state)
-    print(omega_r)
+    print("FOR FLUXONIUM STATE ", fluxonium_state, "omega_r is ", omega_r )
+    #print(omega_r)
     omega_d = 0.5 * (Omega_r(params, pulse, 1) + Omega_r(params, pulse, 0))
+    # omega_d = pulse.omega_d
+    # omega_d = Omega_r(params, pulse, 1)
+    # omega_d = Omega_r(params, pulse, 0)
     omega_r_bare = params.omega_r
     delta_r = omega_r_bare - omega_d
     h_res = delta_r * ops["n_photon"]
@@ -192,9 +198,34 @@ def readout_hamiltonian(params: DeviceParameters, pulse: PulseParameters, fluxon
 
     h_static = h_res + ops["h_fluxonium"] + h_coupling
 
-    def modulation(t: float):
-        amp = jnp.where(t < 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2, 0.0))
+    def modulation(t: float): #based on the pulse parameters and the current time t. The modulation is given by the envelope of the pulse multiplied by a cosine function at the drive frequency.
+        amp = jnp.where(t< 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2, 0.0))
+       
         return amp * 0.5
+
+    # def modulation(t: float):
+    #     rise_time = 16.0
+    #     fall_time = 16.0
+
+    #     amp = jnp.where(
+    #         t < 100.0,
+    #         pulse.epsilon1,
+    #         jnp.where(t < 300.0, pulse.epsilon2, 0.0)
+    #     )
+
+    #     rise = jnp.where(
+    #         t < rise_time,
+    #         jnp.exp(-((t - rise_time)**2)/(2*(rise_time/3)**2)),
+    #         1.0,
+    #     )
+
+    #     fall = jnp.where(
+    #         t > 300.0 - fall_time,
+    #         jnp.exp(-((t - (300.0 - fall_time))**2)/(2*(fall_time/3)**2)),
+    #         1.0,
+    #     )
+
+    #     return 0.5 * amp * rise * fall
 
     def drive_static(t: float):
         return -modulation(t)                          # coeff of (a + a.dag())
@@ -204,6 +235,81 @@ def readout_hamiltonian(params: DeviceParameters, pulse: PulseParameters, fluxon
 
     def drive_a_dag(t: float):
         return modulation(t) * jnp.exp(2 * (1j) * omega_d * t)    # coeff of a.dag(), fast
+
+    h_drive = (1j)*(dq.modulated(drive_static, ops["a"] - ops["a"].dag())
+               + dq.modulated(drive_a, ops["a"])
+               - dq.modulated(drive_a_dag, ops["a"].dag()))
+    
+    
+
+    return h_static + h_drive, omega_d
+
+
+def floquet_readout_hamiltonian(params: DeviceParameters, pulse: PulseParameters, fluxonium_state: int) -> dq.TimeQArray:
+    '''READOUT HAMILTONIAN BASED ON THE SHILLITO et.al . PAPER'''
+    ops = operators(params, pulse)
+    omega_r = Omega_r(params, pulse, fluxonium_state)
+    #print(omega_r)
+    omega_d = 0.5 * (Omega_r(params, pulse, 1) + Omega_r(params, pulse, 0))
+    #omega_d = Omega_r(params, pulse, fluxonium_state)
+    omega_r_bare = params.omega_r
+    delta_r = omega_r_bare - omega_d
+    h_res = delta_r * ops["n_photon"]
+
+    def wrap_angle(theta):
+        return jnp.mod(theta, 2 * jnp.pi)
+
+    def coup_a(t: float):
+        p = wrap_angle(omega_d * t)
+        return  params.g * jnp.exp((-1j) * round(p, 3))
+
+    def coup_a_dag(t: float):
+        p = wrap_angle(omega_d * t)
+        return  params.g * jnp.exp((1j) * round(p, 3))
+
+    h_coupling = (-1j) * (dq.modulated(coup_a_dag, ops["n"] @ ops["a"].dag()) - dq.modulated(coup_a, ops["n"] @ ops["a"]))
+
+    h_static = h_res + ops["h_fluxonium"] + h_coupling
+
+    def modulation(t: float): #based on the pulse parameters and the current time t. The modulation is given by the envelope of the pulse multiplied by a cosine function at the drive frequency.
+        amp = jnp.where(t< 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2, 0.0))
+       
+        return amp * 0.5
+
+    # def modulation(t: float):
+    #     rise_time = 16.0
+    #     fall_time = 16.0
+
+    #     amp = jnp.where(
+    #         t < 100.0,
+    #         pulse.epsilon1,
+    #         jnp.where(t < 300.0, pulse.epsilon2, 0.0)
+    #     )
+
+    #     rise = jnp.where(
+    #         t < rise_time,
+    #         jnp.exp(-((t - rise_time)**2)/(2*(rise_time/3)**2)),
+    #         1.0,
+    #     )
+
+    #     fall = jnp.where(
+    #         t > 300.0 - fall_time,
+    #         jnp.exp(-((t - (300.0 - fall_time))**2)/(2*(fall_time/3)**2)),
+    #         1.0,
+    #     )
+
+    #     return 0.5 * amp * rise * fall
+
+    def drive_static(t: float):
+        return -modulation(t)                          # coeff of (a + a.dag())
+
+    def drive_a(t: float):
+        p = wrap_angle(omega_d * t)
+        return modulation(t) * jnp.exp(2 * (-1j) * round(p, 3))   # coeff of a, fast
+
+    def drive_a_dag(t: float):
+        p = wrap_angle(omega_d * t)
+        return modulation(t) * jnp.exp(2 * (1j) * round(p, 3))    # coeff of a.dag(), fast
 
     h_drive = (1j)*(dq.modulated(drive_static, ops["a"] - ops["a"].dag())
                + dq.modulated(drive_a, ops["a"])
@@ -226,10 +332,10 @@ def readout_hamiltonian_rwa(params: DeviceParameters, pulse: PulseParameters, fl
     h_static = h_res + ops["h_fluxonium"] + params.g *(-1j)*( ops["a"] @ ops["n_plus"] - ops["a"].dag() @ ops["n_minus"] ) # The static part of the Hamiltonian in the rotating frame includes the resonator Hamiltonian, the fluxonium Hamiltonian, and the coupling term between the drive and the charge operator of the fluxonium. This static Hamiltonian captures the essential physics of the system in the rotating frame, and serves as the baseline for adding the time-dependent drive modulation.
     print("Hermicity error:", dq.norm(h_static - h_static.dag()))
     h_static = dq.constant(h_static) # We then add the time-dependent modulation for the drive term, which captures the time dependence of the drive amplitude. The modulation function is defined to have different values during different time intervals of the pulse, allowing us to model a pulse that has a certain amplitude for a specified duration and then turns off. The modulation is applied to the drive operator in the Hamiltonian, which leads to time-dependent dynamics when we simulate the system.
-    def modulation(t: float): #based on the pulse parameters and the current time t. The modulation is given by the envelope of the pulse multiplied by a cosine function at the drive frequency.
-        amp = jnp.where(t< 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2, 0.0))
-       # print(t)
-        return amp * 0.5
+    # def modulation(t: float): #based on the pulse parameters and the current time t. The modulation is given by the envelope of the pulse multiplied by a cosine function at the drive frequency.
+    #     amp = jnp.where(t< 100.0, pulse.epsilon1, jnp.where(t < 300.0, pulse.epsilon2, 0.0))
+    #    # print(t)
+    #     return amp * 0.5
     # def modulation(t):
 
     #     t_ramp = 10
@@ -269,30 +375,29 @@ def readout_hamiltonian_rwa(params: DeviceParameters, pulse: PulseParameters, fl
     #     #off = 0.5*(1 - jnp.tanh((t - 300.0)/sigma_step))
 
     #     return 0.5 * amp * rise 
-    # def modulation(t):
+    def modulation(t: float):
+        rise_time = 96.0
+        fall_time = 96.0
 
-    #     tau_rise = 20.0  # ns
+        amp = jnp.where(
+            t < 100.0,
+            pulse.epsilon1,
+            jnp.where(t < 300.0, pulse.epsilon2, 0.0)
+        )
 
-    #     # Gaussian rise
-    #     rise = jnp.where(
-    #         t < tau_rise,
-    #         jnp.exp(-0.5*((t - tau_rise)/8.0)**2),
-    #         1.0
-    #     )
+        rise = jnp.where(
+            t < rise_time,
+            jnp.exp(-((t - rise_time)**2)/(2*(rise_time/3)**2)),
+            1.0,
+        )
 
-    #     rise = (rise - jnp.exp(-0.5*(tau_rise/8.0)**2)) / (
-    #             1.0 - jnp.exp(-0.5*(tau_rise/8.0)**2))
+        fall = jnp.where(
+            t > 300.0 - fall_time,
+            jnp.exp(-((t - (300.0 - fall_time))**2)/(2*(fall_time/3)**2)),
+            1.0,
+        )
 
-    #     # Smooth epsilon1 -> epsilon2 transition
-    #     sigma = 5.0
-    #     s = 0.5 * (1 + jnp.tanh((t - 100.0)/sigma))
-
-    #     amp = pulse.epsilon1*(1-s) + pulse.epsilon2*s
-
-    #     # Smooth turn-off at 300 ns
-    #     off = 0.5 * (1 - jnp.tanh((t - 300.0)/sigma))
-
-    #     return 0.5 * amp * rise * off
+        return 0.5 * amp * rise * fall
     return h_static + dq.modulated(modulation, ops["drive_op"]), omega_d
 
 

@@ -69,7 +69,7 @@ def run_readout_trajectory(
     exp_ops = [ops["a"], ops["n_photon"], *projectors] # Construct the list of operators for which we want to compute expectation values during the simulation. This includes the annihilation operator for the resonator, the number operator for the resonator, the projectors onto each fluxonium state, and a projector onto the computational subspace. Each operator is represented as a QArray.
     #exp_ops = [ops["n_photon"]]
     dt = sim.tsave[1] - sim.tsave[0] # Compute the time step between the saved time points, which will be used to determine the time span for each segment of the simulation. This is important for ensuring that the simulation is run with the correct time resolution and that the results are saved at the desired time points.
-    chunk_time = 20.0
+    chunk_time = 5.0
     chunk = max(1, int(round(chunk_time / dt))) # Determine the number of time steps to include in each chunk of the simulation, based on the specified chunk time and the time step. This allows us to run the simulation in segments, which can help manage memory usage and improve performance for long simulations.
     all_expects , all_p_B0, all_p_B1 = [], [], []
     #P_comp_np = np.asarray(P_comp.to_jax())
@@ -139,7 +139,17 @@ def run_readout_trajectory(
     p_B1 = np.concatenate(all_p_B1)
 
     assert len(p_B0) == len(sim.tsave), f"length mismatch: {len(p_B0)} VS {len(p_B1)}"
-    leakage = np.clip(1.0 - p_B0 - p_B1, 0, 1.0)
+
+
+
+
+
+    leakage = np.clip(1.0 - p_B0 - p_B1, 0, 1.0) ##################
+
+
+
+
+
     #computational_population = np.concatenate(all_comp_pop)
     #print("Initial comp pop =", computational_population[0])
     #print("Initial leakage =", 1- computational_population[0])
@@ -159,20 +169,16 @@ def run_readout_trajectory(
     )
     print(fluxonium_populations)
 
-    computational_population = np.clip(
-        expects[-1].real,
-        1e-4,
-        1e4,
-    )
+    # computational_population = np.clip(
+    #     expects[-1].real,
+    #     1e-4,
+    #     1e4,
+    # )
 
    
     #print("For fluxonium state: ", branch["0"])
     #print("For fluxonium state: ", branch["1"])
-    # leakage_2 = np.clip(
-    #     (1.0 - (fluxonium_populations[0] + fluxonium_populations[1])),
-    #     1e-4,
-    #     1.0,
-    # )
+    #leakage = np.clip((1.0 - (fluxonium_populations[0] + fluxonium_populations[1])), 0.0 , 1.0 )
     #fluxonium_populations = expects[2 : 2 + params.fluxonium_dim].real
 
 
@@ -195,8 +201,8 @@ def run_readout_pair(
     sim: SimulationParameters,
 ) -> ReadoutPairResult:
     # Run readout simulations for both the ground and excited states of the fluxonium, and compute the resulting SNR and assignment error as functions of time. We use the run_readout_trajectory function to simulate the trajectories for both initial states, and then compute the SNR and assignment error based on the resulting resonator fields.
-    ground = run_readout_trajectory(params, pulse, sim, initial_fluxonium_state=1) # Simulate the readout trajectory for the ground state of the fluxonium, which corresponds to an initial fluxonium state of 0. We obtain the ReadoutResult for the ground state, which includes the time points, resonator field, resonator population, fluxonium populations, and leakage as functions of time.
-    excited = ground#run_readout_trajectory(params, pulse, sim, initial_fluxonium_state=1)#run_readout_trajectory(params, pulse, sim, initial_fluxonium_state=1)# Simulate the readout trajectory for the excited state of the fluxonium, which corresponds to an initial fluxonium state of 1. We obtain the ReadoutResult for the excited state, which includes the time points, resonator field, resonator population, fluxonium populations, and leakage as functions of time.
+    ground = run_readout_trajectory(params, pulse, sim, initial_fluxonium_state=0) # Simulate the readout trajectory for the ground state of the fluxonium, which corresponds to an initial fluxonium state of 0. We obtain the ReadoutResult for the ground state, which includes the time points, resonator field, resonator population, fluxonium populations, and leakage as functions of time.
+    excited = run_readout_trajectory(params, pulse, sim, initial_fluxonium_state=1)#run_readout_trajectory(params, pulse, sim, initial_fluxonium_state=1)# Simulate the readout trajectory for the excited state of the fluxonium, which corresponds to an initial fluxonium state of 1. We obtain the ReadoutResult for the excited state, which includes the time points, resonator field, resonator population, fluxonium populations, and leakage as functions of time.
     snr = readout_snr( # Compute the SNR for the readout, based on the resonator fields for the ground and excited states, and the measurement parameters. The SNR is computed as a function of time, and takes into account the separation between the resonator fields as well as the measurement efficiency and resonator decay rate.
         sim.tsave,
         ground.resonator_field,
