@@ -180,9 +180,9 @@ def readout_hamiltonian(params: DeviceParameters, pulse: PulseParameters, fluxon
     omega_r = Omega_r(params, pulse, fluxonium_state)
     print("FOR FLUXONIUM STATE ", fluxonium_state, "omega_r is ", omega_r )
     #print(omega_r)
-    omega_d = 0.5 * (Omega_r(params, pulse, 1) + Omega_r(params, pulse, 0))
+    # omega_d = 0.5 * (Omega_r(params, pulse, 1) + Omega_r(params, pulse, 0))
     # omega_d = pulse.omega_d
-    # omega_d = Omega_r(params, pulse, 1)
+    omega_d = Omega_r(params, pulse, 1)
     # omega_d = Omega_r(params, pulse, 0)
     omega_r_bare = params.omega_r
     delta_r = omega_r_bare - omega_d
